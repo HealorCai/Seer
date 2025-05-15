@@ -117,7 +117,8 @@ def init_distributed_device(args):
             os.environ["LOCAL_RANK"] = str(args.local_rank)
             os.environ["RANK"] = str(args.rank)
             os.environ["WORLD_SIZE"] = str(args.world_size)
-            os.environ['NCCL_BLOCKING_WAIT'] = '0'  # not to enforce timeout
+            # os.environ['NCCL_BLOCKING_WAIT'] = '0'  # not to enforce timeout
+            os.environ['TORCH_NCCL_BLOCKING_WAIT'] = '0'  # not to enforce timeout
             torch.distributed.init_process_group(
                 # timeout=timedelta(seconds=7200000), # was 1800000
                 timeout=datetime.timedelta(seconds=7200),
@@ -128,7 +129,8 @@ def init_distributed_device(args):
             )
         else:
             # DDP via torchrun, torch.distributed.launch
-            os.environ['NCCL_BLOCKING_WAIT'] = '0'  # not to enforce timeout
+            # os.environ['NCCL_BLOCKING_WAIT'] = '0'  # not to enforce timeout
+            os.environ['TORCH_NCCL_BLOCKING_WAIT'] = '0'  # not to enforce timeout
             args.local_rank, _, _ = world_info_from_env()
             torch.distributed.init_process_group(
                 # timeout=timedelta(seconds=7200000), # was 18000

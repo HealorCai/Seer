@@ -137,6 +137,7 @@ def process_state(
     for state_ob in state_obs_keys:
         if window_size == 0 and seq_idx == 0:  # single file loader
             state_tensor = torch.from_numpy(episode[state_ob]).float()
+            # print(state_tensor.shape) # 17,15
         else:  # episode loader
             state_tensor = torch.from_numpy(episode[state_ob][seq_idx : seq_idx + window_size]).float()
         # expand dims for single environment obs
@@ -417,59 +418,80 @@ class BaseCalvinDataset(Dataset):
         proprio_state: DictConfig = prop_state,
         lang_folder: str = "lang_annotations",
         num_workers: int = 0,
-        key: str = "lang",
+        key: str = "lang", # "except_lang"[pre]
         obs_space: DictConfig = obs_config,
         transforms: Dict = {},
         batch_size: int = 32,
-        window_size: int = 16,
-        min_window_size: int = 16,
-        max_window_size: int = 16,
+        window_size: int = 16, # 17[pre]
+        min_window_size: int = 16, # 12[pre]
+        max_window_size: int = 16, # 24[pre]
         pad: bool = True,
         aux_lang_loss_window: int = 1,
-        rgb_pad=-1,
-        gripper_pad=-1,
-        traj_cons=False,
-        text_aug=False,
-        dif_ws=False,
-        act_step=1,
-        data_in_ceph=False,
+        rgb_pad=-1, # 10[pre]
+        gripper_pad=-1, # 4[pre]
+        traj_cons=False, # True[pre]
+        text_aug=False, # False[pre]
+        dif_ws=False, # False[pre]
+        act_step=1,  # 1[pre]
+        data_in_ceph=False, # False[pre]
         **kwargs: Any,
     ):
         self.observation_space = obs_space
-        self.proprio_state = proprio_state
-        self.transforms = transforms
-        self.with_lang = key == "lang"
-        self.except_lang = key == "except_lang"
-        self.relative_actions = "rel_actions" in self.observation_space["actions"]
+        # obs_config = DictConfig(
+        #     {
+        #         "rgb_obs": ["rgb_static", "rgb_gripper"],
+        #         "depth_obs": [],
+        #         "state_obs": ["robot_obs"],
+        #         "actions": ["rel_actions"],
+        #         "language": ["language"],
+        #     }
+        # )[pre]
 
-        self.pad = pad
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.window_size = window_size
-        if not dif_ws:
+        self.proprio_state = proprio_state
+        # prop_state = DictConfig(
+        #     {
+        #         "n_scene_obs": 24,
+        #         "n_state_obs": 15,
+        #         "keep_indices": [[0, 15]],
+        #         "robot_orientation_idx": [3, 6],
+        #         "normalize": True,
+        #         "normalize_robot_orientation": True,
+        #     }
+        # )[pre]
+
+        self.transforms = transforms # {}[pre]
+        self.with_lang = key == "lang" # False[pre]
+        self.except_lang = key == "except_lang" # True[pre]
+        self.relative_actions = "rel_actions" in self.observation_space["actions"] # True[pre]
+
+        self.pad = pad # True[pre]
+        self.batch_size = batch_size # 32[pre]
+        self.num_workers = num_workers # 0[pre]
+        self.window_size = window_size # 17[pre]
+        if not dif_ws: # False[pre]
             self.min_window_size = window_size + act_step - 1
             self.max_window_size = window_size + act_step - 1
         else:
             self.min_window_size = min_window_size
             self.max_window_size = max_window_size
-        self.act_step = act_step
+        self.act_step = act_step # 1[pre]
         self.abs_datasets_dir = datasets_dir
-        self.lang_folder = lang_folder  
-        self.aux_lang_loss_window = aux_lang_loss_window
-        self.traj_cons = traj_cons
-        self.data_in_ceph = data_in_ceph
-        if self.data_in_ceph:
+        self.lang_folder = lang_folder # "lang_annotations"
+        self.aux_lang_loss_window = aux_lang_loss_window # 1[pre]
+        self.traj_cons = traj_cons # True[pre]
+        self.data_in_ceph = data_in_ceph # False[pre]
+        if self.data_in_ceph: # False[pre]
             self.conf_path = '~/petreloss.conf'
             self.client = Client(self.conf_path)
        
         with open('./utils/enrich_lang_annotations.json', 'r') as f:
             self.enrich_lang = json.load(f)
-        self.text_aug = text_aug
+        self.text_aug = text_aug # False[pre]
 
-        self.rgb_pad = rgb_pad
+        self.rgb_pad = rgb_pad # 10[pre]
         if self.rgb_pad != -1:
             self.rgb_shift = RandomShiftsAug(rgb_pad)
-        self.gripper_pad = gripper_pad
+        self.gripper_pad = gripper_pad # 4[pre]
         if self.gripper_pad != -1:
             self.gripper_shift = RandomShiftsAug(gripper_pad)
 
@@ -500,6 +522,7 @@ class BaseCalvinDataset(Dataset):
         seq_rgb_obs_dict = {}
         for _, rgb_obs_key in enumerate(rgb_obs_keys):
             rgb_obs = episode[rgb_obs_key]
+            # print(rgb_obs.shape) # (17, 200, 200, 3) 
             # expand dims for single environment obs
             if len(rgb_obs.shape) != 4:
                 rgb_obs = np.expand_dims(rgb_obs, axis=0)
@@ -516,7 +539,7 @@ class BaseCalvinDataset(Dataset):
                 seq_rgb_obs_ = transforms[rgb_obs_key](seq_rgb_obs_)
             seq_rgb_obs_dict[rgb_obs_key] = seq_rgb_obs_
         # shape: N_rgb_obs x (BxHxWxC)
-        return {"rgb_obs": seq_rgb_obs_dict}
+        return {"rgb_obs": seq_rgb_obs_dict} # ["xx": (17, 200, 200, 3)]
 
     def process_language(
         self, episode: Dict[str, np.ndarray], transforms: Dict, with_lang: bool
@@ -581,6 +604,7 @@ class BaseCalvinDataset(Dataset):
         """
 
         episode = self._load_episode(idx, window_size)
+        # episode = {key: np.stack([ep[key] for ep in episodes]) for key in keys}
         seq_state_obs = process_state(
             episode, self.observation_space, self.transforms, self.proprio_state
         )
@@ -812,24 +836,24 @@ class DiskCalvinDataset(BaseCalvinDataset):
         skip_frames: int = 1,
         save_format: str = "npz",
         pretrain: bool = False,
-        partial_data=False,
+        partial_data=False, # False[pre]
         **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
-        self.save_format = save_format
+        self.save_format = save_format # "npz"[pre]
         self.image_fn = image_fn
         self.text_fn = text_fn
-        self.partial_data = partial_data
+        self.partial_data = partial_data # False[pre]
         if self.save_format == "pkl":
             self.load_file = self.load_pkl
         elif self.save_format == "npz":
             self.load_file = partial(self.load_npz, data_in_ceph=self.data_in_ceph)
         else:
             raise NotImplementedError
-        self.pretrain = pretrain
-        self.skip_frames = skip_frames
+        self.pretrain = pretrain # False[pre]
+        self.skip_frames = skip_frames # 1[pre]
 
-        if self.with_lang:
+        if self.with_lang: # False[pre]
             (
                 self.episode_lookup,
                 self.lang_lookup,
@@ -841,7 +865,7 @@ class DiskCalvinDataset(BaseCalvinDataset):
         else:
             self.episode_lookup = self._build_file_indices()
 
-        if self.data_in_ceph:
+        if self.data_in_ceph: # False[pre]
             self.naming_pattern, self.n_digits = self.ceph_lookup_naming_pattern()
         else:
             self.naming_pattern, self.n_digits = lookup_naming_pattern(
@@ -1040,7 +1064,7 @@ class DiskCalvinDataset(BaseCalvinDataset):
 
         for start_idx, end_idx in ep_start_end_ids:
             assert end_idx > self.max_window_size
-            for idx in range(start_idx, end_idx + 1 - self.min_window_size):
+            for idx in range(start_idx, end_idx + 1 - self.min_window_size): # +2? 不然漏掉最后一帧？ 虽然问题不大
                 episode_lookup.append(idx)
         return np.array(episode_lookup)
 
@@ -1110,8 +1134,8 @@ def get_calvin_dataset(args, image_processor, tokenizer, epoch=0, floor=False, e
     shared_epoch = SharedEpoch(epoch=epoch)
     preprocess_image_fn = functools.partial(
         preprocess_image, image_processor=image_processor
-    )
-    preprocess_text_fn = functools.partial(preprocess_text_calvin, tokenizer=tokenizer)
+    ) # clip/ViT-B-32.pt
+    preprocess_text_fn = functools.partial(preprocess_text_calvin, tokenizer=tokenizer) # clip
     if args.data_in_ceph:
         datasets_dir = dataset_path + "/training"
     else:
@@ -1120,24 +1144,24 @@ def get_calvin_dataset(args, image_processor, tokenizer, epoch=0, floor=False, e
         datasets_dir=datasets_dir,
         image_fn=preprocess_image_fn,
         text_fn=preprocess_text_fn,
-        window_size=args.window_size,
-        rgb_pad=args.rgb_pad,
-        gripper_pad=args.gripper_pad,
-        traj_cons=args.traj_cons,
-        text_aug=args.text_aug,
-        dif_ws=args.dif_ws,
-        min_window_size=args.min_window_size,
-        max_window_size=args.max_window_size,
-        act_step=args.multi_step_action,
-        partial_data=args.partial_data,
-        data_in_ceph=args.data_in_ceph,
-        key='except_lang' if except_lang else 'lang',
+        window_size=args.window_size, # 17
+        rgb_pad=args.rgb_pad, # 10
+        gripper_pad=args.gripper_pad, # 4
+        traj_cons=args.traj_cons, # True
+        text_aug=args.text_aug, # False
+        dif_ws=args.dif_ws, # False
+        min_window_size=args.min_window_size, # 12
+        max_window_size=args.max_window_size, # 24
+        act_step=args.multi_step_action, # 1
+        partial_data=args.partial_data, # False
+        data_in_ceph=args.data_in_ceph, # False
+        key='except_lang' if except_lang else 'lang', # except_lang
     )
-    round_fn = math.floor if floor else math.ceil
+    round_fn = math.floor if floor else math.ceil # False
     num_samples = len(calvin_dataset)
     global_batch_size = args.batch_size * args.world_size
     num_batches = round_fn(num_samples / global_batch_size)
-    num_workers = max(1, args.workers)
+    num_workers = max(1, args.workers) # 8
     num_worker_batches = round_fn(num_batches / num_workers)  #
     num_batches = num_worker_batches * num_workers
     num_samples = num_batches * global_batch_size
@@ -1161,7 +1185,9 @@ def get_calvin_dataset(args, image_processor, tokenizer, epoch=0, floor=False, e
         collate_fn=calvin_dataset.collator,
         drop_last=True
     )
-    dataloader.num_batches = num_batches
+
+    # just define and assign the value
+    dataloader.num_batches = num_batches 
     dataloader.num_samples = num_samples
 
     return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch, sampler=sampler, dataset=calvin_dataset)

@@ -312,6 +312,14 @@ class SeerAgent(nn.Module):
 
 
     def forward(self, image_primary, image_wrist, state, text_token, action=None):  
+        # arm_pred_action, gripper_pred_action, image_pred, arm_pred_state, gripper_pred_state, loss_arm_action = model(
+        #     image_primary=input_image_primary, # (B, sequence_length, 200, 200, 3)
+        #     image_wrist=input_image_wrist, # (B, sequence_length, 84, 84, 3)
+        #     state=input_state, # (B, sequence_length, 7)
+        #     text_token=input_text_token, # (B, sequence_length, D_text_token)
+        #     action=actions[:, :args.sequence_length, :], # (B, sequence_length, 7)
+        # )
+        
         if self.training and self.phase == "pretrain":
             if self.obs_pred:
                 this_num_obs_token = self.NUM_OBS_TOKEN

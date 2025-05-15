@@ -1,12 +1,13 @@
 #!/bin/bash
 ### NEED TO CHANGE ###
 calvin_dataset_path="calvin/dataset/task_ABC_D"
-save_checkpoint_path="checkpoints/"
-vit_checkpoint_path="checkpoints/vit_mae/mae_pretrain_vit_base.pth" # downloaded from https://drive.google.com/file/d/1bSsvRI4mDM3Gg51C6xO0l9CbojYw3OEt/view?usp=sharing
+save_checkpoint_path="/fs-computility/efm/caizetao/dataset/moat/ckpt/"
+vit_checkpoint_path="/fs-computility/efm/caizetao/dataset/moat/ckpt/vit_mae/mae_pretrain_vit_base.pth" # downloaded from https://drive.google.com/file/d/1bSsvRI4mDM3Gg51C6xO0l9CbojYw3OEt/view?usp=sharing
 ### NEED TO CHANGE ###
+WANDB_API_KEY=612575ae4d292134b00db8f7d5e867aae4def5b9
 
-node=8
-node_num=8
+node=1
+node_num=1
 torchrun --nnodes=${node} --nproc_per_node=${node_num} --master_port=10211 train.py \
     --traj_cons \
     --rgb_pad 10 \
@@ -27,7 +28,7 @@ torchrun --nnodes=${node} --nproc_per_node=${node_num} --master_port=10211 train
     --wandb_project seer \
     --weight_decay 1e-4 \
     --num_resampler_query 6 \
-    --run_name pretrain_seer_calvin_abc_d \
+    --run_name pretrain_Seer_calvin_abc_d_debug \
     --save_checkpoint_path ${save_checkpoint_path} \
     --transformer_layers 24 \
     --phase "pretrain" \

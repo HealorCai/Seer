@@ -2,10 +2,10 @@
 export GIT_PYTHON_REFRESH=quiet
 calvin_dataset_path="calvin/dataset/task_ABC_D"
 calvin_conf_path="calvin/calvin_models/conf"
-vit_checkpoint_path="checkpoints/vit_mae/mae_pretrain_vit_base.pth" # downloaded from https://drive.google.com/file/d/1bSsvRI4mDM3Gg51C6xO0l9CbojYw3OEt/view?usp=sharing
-save_checkpoint_path="checkpoints/"
+vit_checkpoint_path="/fs-computility/efm/caizetao/dataset/moat/ckpt/vit_mae/mae_pretrain_vit_base.pth" # downloaded from https://drive.google.com/file/d/1bSsvRI4mDM3Gg51C6xO0l9CbojYw3OEt/view?usp=sharing
+save_checkpoint_path="/fs-computility/efm/caizetao/dataset/moat/ckpt/"
 ### NEED TO CHANGE the checkpoint path ###
-resume_from_checkpoint="checkpoints/xxx/xx.pth"
+resume_from_checkpoint="/fs-computility/efm/caizetao/dataset/moat/ckpt/finetune_calvin_abc_d_ep5/11.pth"
 IFS='/' read -ra path_parts <<< "$resume_from_checkpoint"
 run_name="${path_parts[-2]}"
 log_name="${path_parts[-1]}"
@@ -13,7 +13,7 @@ log_folder="eval_logs/$run_name"
 mkdir -p "$log_folder"
 log_file="eval_logs/$run_name/evaluate_$log_name.log"
 node=1
-node_num=8
+node_num=2
 
 torchrun --nnodes=${node} --nproc_per_node=${node_num} --master_port=10012 eval_calvin.py \
     --traj_cons \

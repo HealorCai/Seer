@@ -1,12 +1,13 @@
 #!/bin/bash
 ### NEED TO CHANGE ###
 calvin_dataset_path="calvin/dataset/task_ABC_D"
-save_checkpoint_path="checkpoints/"
-finetune_from_pretrained_ckpt="checkpoints/pretrain_calvin_abc_d/4.pth"
-vit_checkpoint_path="checkpoints/vit_mae/mae_pretrain_vit_base.pth" # downloaded from https://drive.google.com/file/d/1bSsvRI4mDM3Gg51C6xO0l9CbojYw3OEt/view?usp=sharing
+save_checkpoint_path="/fs-computility/efm/caizetao/dataset/moat/ckpt/"
+finetune_from_pretrained_ckpt="/fs-computility/efm/caizetao/dataset/moat/ckpt/pretrain_seer_calvin_abc_d/4.pth"
+vit_checkpoint_path="/fs-computility/efm/caizetao/dataset/moat/ckpt/vit_mae/mae_pretrain_vit_base.pth" # downloaded from https://drive.google.com/file/d/1bSsvRI4mDM3Gg51C6xO0l9CbojYw3OEt/view?usp=sharing
 ### NEED TO CHANGE ###
+WANDB_API_KEY=612575ae4d292134b00db8f7d5e867aae4def5b9
 
-node=4
+node=1
 node_num=8
 torchrun --nnodes=${node} --nproc_per_node=${node_num} --master_port=10211 train.py \
     --traj_cons \

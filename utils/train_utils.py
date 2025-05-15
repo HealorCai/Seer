@@ -68,7 +68,7 @@ def train_one_epoch_calvin(
     num_batches_per_epoch_calvin = calvin_loader.num_batches
     num_batches_per_epoch = num_batches_per_epoch_calvin
     total_training_steps = num_batches_per_epoch * args.num_epochs
-    autocast = get_autocast(args.precision)
+    autocast = get_autocast(args.precision) # fp32
     cast_dtype = get_cast_dtype(args.precision)
     model.train()
 
@@ -106,7 +106,7 @@ def train_one_epoch_calvin(
             input_states = torch.cat([states[..., :6], states[..., -2:]], dim=-1)
         else:
             input_states = torch.cat([states[..., :6], states[..., [-1]]], dim=-1)
-            input_states[..., 6:] = (input_states[..., 6:] + 1) // 2
+            input_states[..., 6:] = (input_states[..., 6:] + 1) // 2 # close -> 0, open -> 1
         
         # self_key_point
         self_keypoints = None
@@ -120,16 +120,16 @@ def train_one_epoch_calvin(
         input_text_token = text_tokens[:, :args.sequence_length, :]
         input_state = input_states[:, :args.sequence_length, :]
 
-        # label action
+        # label action (B, args.sequence_length-args.atten_goal, args.action_pred_steps, D_a)
         label_actions = torch.cat([actions[:, j:args.sequence_length-args.atten_goal+j, :].unsqueeze(-2) for j in range(args.action_pred_steps)], dim=-2) 
 
         with autocast():  # image_primary, image_wrist, state, language_instruction
             arm_pred_action, gripper_pred_action, image_pred, arm_pred_state, gripper_pred_state, loss_arm_action = model(
-                image_primary=input_image_primary,
-                image_wrist=input_image_wrist,
-                state=input_state,
-                text_token=input_text_token,
-                action=actions[:, :args.sequence_length, :],
+                image_primary=input_image_primary, # (B, sequence_length, 200, 200, 3)
+                image_wrist=input_image_wrist, # (B, sequence_length, 84, 84, 3)
+                state=input_state, # (B, sequence_length, 7)
+                text_token=input_text_token, # (B, sequence_length, D_text_token)
+                action=actions[:, :args.sequence_length, :], # (B, sequence_length, 7)
             )
         # loss_action
         if args.loss_action and args.action_pred_steps:

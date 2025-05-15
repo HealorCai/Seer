@@ -19,6 +19,7 @@ from utils.arguments_utils import get_parser
 from utils.data_utils import get_calvin_dataset, get_calvin_val_dataset, get_droid_dataset, get_libero_pretrain_dataset, get_libero_finetune_dataset, get_real_finetune_dataset, get_oxe_dataset
 from utils.distributed_utils import init_distributed_device, world_info_from_env  
 
+from pdb import set_trace
 
 def random_seed(seed=42, rank=0):
     torch.manual_seed(seed + rank)
@@ -36,25 +37,33 @@ def count_parameters(model):
 
 @record
 def main(args):
+    # wandb
     os.environ["WANDB_DIR"] = f"{os.path.abspath(args.save_checkpoint_path)}"
     if args.save_checkpoints_to_wandb and args.save_checkpoint and not args.report_to_wandb:
         raise ValueError("save_checkpoints_to_wandb requires report_to_wandb")
     if args.offline:
         os.environ["WANDB_MODE"] = "offline"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
+    # rank
     args.local_rank, args.rank, args.world_size = world_info_from_env()
     device_id = init_distributed_device(args)
     print("device_id: ", device_id)
+
+    # seed
     random_seed(args.seed)
+
     ptbs = args.world_size * args.batch_size * args.gradient_accumulation_steps
     print("training batch size:", ptbs)
     args.run_name = args.run_name.replace("Seer", f"Seer_ptbs{ptbs}_{args.transformer_layers}layers_{args.transformer_heads}heads_hd{args.hidden_dim}")
     print("run_name:", args.run_name)
+
+    # model
     model = SeerAgent(
         finetune_type=args.finetune_type,
         clip_device=device_id,
         vit_checkpoint_path=args.vit_checkpoint_path,
-        sequence_length=args.sequence_length,
+        sequence_length=args.sequence_length, # 14
         num_resampler_query=args.num_resampler_query,
         num_obs_token_per_image=args.num_obs_token_per_image,
         calvin_input_image_size=args.calvin_input_image_size,
@@ -72,6 +81,8 @@ def main(args):
         phase=args.phase,
         gripper_width=args.gripper_width,
     )
+
+    # dataset
     if args.finetune_type == "calvin":
         calvin_dataset = get_calvin_dataset(args, model.image_processor, clip, epoch=0, except_lang=args.except_lang)
     elif args.finetune_type == "droid":
@@ -84,8 +95,11 @@ def main(args):
         calvin_dataset = get_real_finetune_dataset(args, model.image_processor, clip, epoch=0)
     elif args.finetune_type == "oxe":
         calvin_dataset = get_oxe_dataset(args, model.image_processor, clip, epoch=0)
+    
     random_seed(args.seed, args.rank)
+    
     print(f"Start running training on rank {args.rank}.")
+    
     if args.rank == 0 and args.report_to_wandb:
         print("wandb_project :", args.wandb_project)
         print("wandb_entity :", args.wandb_entity)
@@ -95,7 +109,10 @@ def main(args):
             name=args.run_name,
             config=vars(args),
         )
+    
     device_id = args.rank % torch.cuda.device_count()
+    
+    # bf16
     if args.precision == "bf16" or args.precision == "amp_bfloat16" or args.precision == "amp_bf16":
         model = model.bfloat16()
     elif args.precision == "fp16":
@@ -109,6 +126,8 @@ def main(args):
         if "image_decoder" in args.bf16_module:
             model.image_decoder.bfloat16()
             model.image_decoder_obs_pred_projector.bfloat16()
+
+    # froze
     model.clip_model.requires_grad_(False)
     model.vision_encoder.requires_grad_(False)
     total_params, trainable_params = count_parameters(model)
@@ -116,7 +135,11 @@ def main(args):
     print("trainable_params: {} M".format(trainable_params/1024/1024))
     model = model.to(device_id)
     model._init_model_type()
+
+    # ddp
     ddp_model = DDP(model, device_ids=[device_id], find_unused_parameters=True)
+
+    # optimizer & lr
     optimizer = torch.optim.AdamW([p for p in ddp_model.parameters() if p.requires_grad], lr=args.learning_rate, weight_decay=args.weight_decay)  # TODO make sure the parameters which need to be optimized are passing
     total_training_steps = calvin_dataset.dataloader.num_batches * args.num_epochs
     args.warmup_steps = calvin_dataset.dataloader.num_batches * args.warmup_epochs
@@ -154,7 +177,11 @@ def main(args):
         lr_scheduler = get_constant_schedule_with_warmup(
             optimizer, num_warmup_steps=args.warmup_steps
         )
+
+    
     resume_from_epoch = 0
+
+    # finetune
     if args.finetune_from_pretrained_ckpt is not None:
         if args.rank == 0:
             print(f"Starting finetuning from pretrained checkpoint {args.finetune_from_pretrained_ckpt}")    
@@ -180,6 +207,8 @@ def main(args):
             checkpoint["model_state_dict"]["module.transformer_backbone_position_embedding"] = checkpoint["model_state_dict"]["module.transformer_backbone_position_embedding"][:, :args.sequence_length, :, :]
         print("loading pretrained weights :", checkpoint["model_state_dict"].keys())
         ddp_model.load_state_dict(checkpoint["model_state_dict"], False)
+    
+    # resume
     if args.resume_from_checkpoint is not None:
         if args.rank == 0:
             print(f"Loading checkpoint from {args.resume_from_checkpoint}")
@@ -193,6 +222,7 @@ def main(args):
     if args.rank == 0 and not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
     
+    # train
     ddp_model.train()
     for epoch in range(resume_from_epoch, args.num_epochs):
         calvin_dataset.set_epoch(epoch)

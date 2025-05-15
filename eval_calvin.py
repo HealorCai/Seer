@@ -107,5 +107,6 @@ def main():
         raise NotImplementedError
 
 if __name__ == "__main__":
-    os.environ["NCCL_BLOCKING_WAIT"] = "0"
+    # os.environ["NCCL_BLOCKING_WAIT"] = "0"
+    os.environ["TORCH_NCCL_BLOCKING_WAIT"] = "0"
     main()
